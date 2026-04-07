@@ -1,0 +1,295 @@
+------
+server{
+    listen 80;
+    server_name domain;
+
+    root /var/www/domain.com;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    error_log /var/log/nginx/domain_error_log;
+    access_log /var/log/nginx/domain_access_log;
+}
+
+Single Page Applications
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+
+PHP Frameworks (Laravel, WordPress
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+Security (Validating Files):Used to ensure a PHP file actually exists on disk before passing it to the FastCGI backend, preventing certain script injection exploits.
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_pass 127.0.0.1:9000;
+    }
+
+Proxy
+
+location / {
+    proxy_pass http://backend_server;
+
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 60s;
+    proxy_send_timeout 60s;
+
+    proxy_set_header HOST $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_buffering on;
+}
+
+loadbalancer 
+
+upstream back_server{
+    blank default round robin, least_conn, ip_hash
+    server domain1;
+    server domain2;
+}
+location / {
+    proxy_pass http://back_server;
+}
+
+limit rate && conn
+    http
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+    limit_req_conn $binary_remote_addr zone=limit_conn:10m;
+
+    location
+    limit_req zone=api_limit burst=10 nodelay;
+    limit_conn conn_limit 2;
+
+gzip
+
+gzip on;
+gzip_types *;
+gzip_min_length 256;
+gzip_proxied any;
+gzip_comp_level 1-9;
+gzip_static on;
+
+cache
+
+location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+    expires 30d; # Sets Cache-Control: max-age=2592000
+    add_header Cache-Control "public";
+}
+
+location ~ /purge(/.*){
+    allow ip;
+    deny ip;
+    proxy_cache_purge my_cache "$scheme$request_method$host$1";
+}
+
+http
+
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size:1g inactive=60m use_temp_path=0ff;
+
+location
+proxy_cache my_cache; // Enable caching for this location
+proxy_cache_valid 200 1m; // Cache 200 responses for 1 minute
+proxy_cache_invalid 404 1m; // Cache 404 responses for 1 minute
+proxy_cache_methods GET HEAD; // Cache only GET and HEAD requests
+proxy_cache_bypass $cookies_sesssion; // Don't cache if session cookie is present
+proxy_cache_bypass $http_cache_control; // Don't cache if Cache-Control header is present
+proxy_no_cache $cookie_session; // Don't cache if session cookie is present
+proxy_cache_purge my_cache "$scheme$request_method$host$1"; // Purge cache for specific URL
+add_header X-Cache-Status $upstream_cache_status / Add a header to indicate cache status (HIT, MISS, BYPASS) in the response
+
+proxy_cache_key "$scheme$request_method$host$request_uri"; // Define a custom cache key based on the request scheme, method, host, and URI
+
+stale proxy
+
+proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504; // Serve stale content if the backend is unavailable or returns an error, while simultaneously attempting to update the cache in the background. This can help improve user experience during backend issues by providing a fallback response.
+
+geo_routing
+
+geoip_country /usr/share/GeoIP/GeoIP.dat; // Load the GeoIP database for country-based routing
+
+location / {
+    if ($geoip_country_code = "US") {
+        proxy_pass http://us_backend;
+    }
+    if ($geoip_country_code = "EU") {
+        proxy_pass http://eu_backend;
+    }
+    # Default backend for other countries
+    proxy_pass http://default_backend;
+}
+
+using map fucntion
+
+map $geoip_country_code $backend {
+    default default_backend;
+    US us_backend;
+    EU eu_backend;
+}
+location / {
+    if ($backend = "us_backend") {
+        proxy_pass http://us_backend;
+    }
+    if ($backend = "eu_backend") {
+        proxy_pass http://eu_backend;
+    }
+    proxy_pass http://default_backend;
+}
+
+map is better than if because it is more efficient and easier to maintain. The map directive allows you to define a mapping between a variable (in this case, the country code) and a value (the backend server). This approach is more efficient because it avoids the overhead of evaluating multiple if statements for each request. Additionally, using map makes the configuration cleaner and easier to read, as it centralizes the routing logic in one place, rather than scattering it across multiple if statements.
+
+
+DB balancong using stream module
+
+stream {
+    upstream db_backend {
+        server db1:3306;
+        server db2:3306;
+    }
+
+    server {
+        listen 3306;
+        proxy_pass db_backend;
+    }
+}
+// The stream module in Nginx is used for handling TCP and UDP traffic, making it suitable for load balancing database connections. In this example, we define an upstream block named db_backend that includes two database servers (db1 and db2) listening on port 3306. The server block listens for incoming connections on port 3306 and proxies them to the db_backend upstream group, allowing for load balancing of database requests across the defined servers.
+
+custom error page
+
+error_page 404 /custom_404.html;
+location = /custom_404.html {
+    root /var/www/domain.com;
+    internal;
+}
+
+redirect ip to domain
+server {
+    listen default_server;
+    server_name _; // This catch-all server block will match any request that doesn't match other server blocks, including requests made directly to the server's IP address.
+
+    return 301 http://domain$request_uri; // Redirect to the specified domain, preserving the original request URI.
+}
+
+hide_server version and name
+
+server_tokens off; // This directive disables the display of the Nginx version number in error pages and the "Server" response header, enhancing security by not revealing specific server information to potential attackers.
+server_name_in_redirect off; // This directive prevents Nginx from including the server name in redirects, which can help avoid exposing internal server names or configurations in redirect responses, further enhancing security and privacy.
+install libngix-mod-http-headers-more-filter;
+
+more_set_headers 'Server: webserver'; // This directive uses the "headers-more" module to set a custom "Server" header in the HTTP response, allowing you to disguise the server software being used (e.g., "webserver" instead of "nginx"), which can help improve security by obscuring server details from potential attackers.
+
+valid_referes domain; // This directive specifies valid referrers for incoming requests. By defining "domain" as a valid referrer, Nginx will check the "Referer" header of incoming requests against this value. If a request's referrer does not match the specified domain, it will be considered invalid.
+if($invalid_referer){ // This condition checks if the incoming request has an invalid referrer (i.e., a referrer that does not match the specified valid referrers). If this condition is true, it indicates that the request is coming from an unauthorized source.
+    return 403;
+}
+
+if($http_origin !~* (domain1|domain2|domain3)) { // This condition checks if the "Origin" header of the incoming request does not match any of the specified domains (domain1, domain2, domain3). The regular expression is case-insensitive due to the "~*" operator. If this condition is true, it indicates that the request is coming from an unauthorized origin.
+    return 403;
+}
+
+if($scheme != 'https') { // This condition checks if the request is not using the HTTPS protocol. If this condition is true, it indicates that the request is being made over an insecure connection.
+    return 403;
+}
+
+map $http_origin $cors_origin {
+    default "";
+    domain1 "https://domain1";
+    domain2 "https://domain2";
+    domain3 "https://domain3";
+}
+
+if ($http_origin ~* (domain1|domain2|domain3)) { // This condition checks if the "Origin" header of the incoming request matches any of the specified domains (domain1, domain2, domain3). The regular expression is case-insensitive due to the "~*" operator. If this condition is true, it indicates that the request is coming from an allowed origin.
+    add_header Access-Control-Allow-Origin $cors_origin; // If the condition is met, this directive adds the "Access-Control-Allow-Origin" header to the response, allowing cross-origin requests from the specified domains. The value of this header is determined by the $cors_origin variable, which is set based on the incoming request's origin.
+}
+
+if($request_methods=OPTIONS){
+    add_header Access-Control-Allow-Methods "GET, POST, OPTIONS"; // This directive adds the "Access-Control-Allow-Methods" header to the response, specifying the allowed HTTP methods (GET, POST, OPTIONS) for cross-origin requests. This is typically used in response to preflight requests made by browsers to determine if the actual request is safe to send.
+    add_header Access-Control-Allow-Headers "Content-Type, Authorization"; // This directive adds the "Access-Control-Allow-Headers" header to the response, specifying which headers can be used in the actual request when making a cross-origin request. In this case, it allows the "Content-Type" and "Authorization" headers.
+    add_header Access-Control-Allow-Credentials "true"; // This directive adds the "Access-Control-Allow-Credentials" header to the response, indicating that the server allows credentials (such as cookies or HTTP authentication) to be included in cross-origin requests. Setting this to "true" allows the client to include credentials in requests to the server.
+    add_header Access-Control-Max-Age 3600; // This directive adds the "Access-Control-Max-Age" header to the response, specifying how long (in seconds) the results of a preflight request can be cached by the client. In this case, it allows the preflight response to be cached for 3600 seconds (1 hour), reducing the number of preflight requests made by the client for subsequent requests to the same resource.
+    return 204; // This line returns a 204 No Content status code in response to an OPTIONS preflight request. A 204 status code indicates that the server successfully processed the request but is not returning any content in the response body. This is appropriate for preflight requests, which are meant to check permissions rather than retrieve data.
+}
+
+
+
+
+----
+variable
+
+$host =domain-name / IP address of the server
+$request_uri = domain+query_string / full original request URI
+$remote_addr = client IP / IP address of the client making the request
+$scheme = http/https protocol / protocol used in the request
+request_methods // HTTP method of the request (GET, POST, OPTIONS, etc.)
+http_origin // value of the Origin header in the incoming request, which indicates the origin of the request (e.g., the domain from which the request is made)
+valid_referes // This variable is used in conjunction with the "valid_referers" directive to check if the "Referer" header of incoming requests matches specified valid referrers. If a request's referrer does not match any of the defined valid referrers, the $invalid_referer variable will be set to 1 (true), indicating that the request has an invalid referrer. This can be used to implement access control based on the source of the request, allowing you to block requests that do not come from trusted sources.
+$invalid_referer // This variable is set to 1 (true) when the "Referer" header of an incoming request does not match any of the specified valid referrers defined in the "valid_referers" directive. It indicates that the request has an invalid referrer, which can be used to implement access control by blocking requests that do not come from trusted sources.
+$binary_remote_addr =provides the client's IP address in a compact binary format / used for efficient storage in shared memory zones
+$upstream_cache_status / indicates whether the response was served from cache (HIT), generated by the backend (MISS), or bypassed (BYPASS)
+$cookie_session; / checks for the presence of a session cookie, often used to determine if a user is logged in or has an active session
+$http_cache_control; / checks for the presence of the Cache-Control header in the incoming request, which can be used to determine if the client is requesting fresh content or allowing cached responses
+
+Preflight request // A preflight request is an HTTP OPTIONS request sent by the browser to the server before making a cross-origin request. It is used to determine if the actual request is safe to send and to check the permissions for the requested resource. The preflight request includes headers such as "Access-Control-Request-Method" and "Access-Control-Request-Headers" to inform the server about the intended HTTP method and headers of the actual request. The server responds to the preflight request with appropriate CORS headers (e.g., "Access-Control-Allow-Origin", "Access-Control-Allow-Methods", "Access-Control-Allow-Headers") to indicate whether the actual request is allowed and what methods and headers are permitted.
+---
+Headers
+
+add_header Strict-Transport-Security "max-age=315360;" always;
+add_header X-Cache-Status $upstream_cache_status
+
+add_header X-Frame-Options "SAMEORIGIN" always; //SAMEORIGIN DENY ALLOW // SAMEORIGIN allows the page to be displayed in a frame on the same origin as the page itself, while DENY prevents the page from being displayed in a frame at all. ALLOW allows the page to be displayed in a frame on any origin.
+add_header X-Content-Type-Options "nosniff" always; //nosniff prevents browsers from MIME-sniffing a response away from the declared content-type, which can help mitigate certain types of attacks, such as cross-site scripting (XSS).
+add_header X-XSS-Protection "1; mode=block" always; //1; mode=block enables the cross-site scripting (XSS) filter built into most modern web browsers. When a potential XSS attack is detected, the browser will block the rendering of the page, preventing the attack from executing.
+add_header Referrer-Policy "no-referrer-when-downgrade" always; // origin, strict-origin, strict-origin, origin-when-cross-origin, strict-origin-when-cross-origin, unsafe-url // no-referrer-when-downgrade means that the Referer header will be sent with the full URL when navigating from HTTPS to HTTPS, but will not be sent when navigating from HTTPS to HTTP, providing a balance between privacy and functionality. // origin means that the Referer header will only include the origin (scheme, host, and port) of the referring page, without the path or query string. strict-origin means that the Referer header will only be sent if the origin of the referring page is the same as the target page. strict-origin-when-cross-origin means that the Referer header will be sent with the full URL when navigating from HTTPS to HTTPS, but will only include the origin when navigating from HTTPS to HTTP or from HTTP to any other origin. unsafe-url means that the Referer header will always include the full URL, regardless of the security context.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted.cdn.com; style-src 'self' https://trusted.cdn.com; img-src 'self' data:; font-src 'self' https://trusted.cdn.com; connect-src 'self' https://api.trusted.com; frame-src 'none';" always; // default-src sets the default policy for fetching resources such as JavaScript, images, CSS, fonts, AJAX requests, frames, etc. script-src specifies valid sources for JavaScript. style-src specifies valid sources for stylesheets. img-src specifies valid sources for images. font-src specifies valid sources for fonts. connect-src specifies valid sources for fetch, XMLHttpRequest, WebSocket, and EventSource connections. frame-src specifies valid sources for nested browsing contexts loading using elements such as <frame> and <iframe>.
+add_header Feature-Policy "geolocation 'self'; microphone 'none'; camera 'none';" always; // geolocation 'self' allows the page to access the user's geolocation data only if the request originates from the same origin as the page. microphone 'none' prevents the page from accessing the user's microphone. camera 'none' prevents the page from accessing the user's camera.
+add_header Access=Control-Allow-Origin "https://example.com" always; // This header allows cross-origin requests from the specified origin (https://example.com in this case). It is used to enable CORS (Cross-Origin Resource Sharing) for the specified domain, allowing resources on the server to be accessed by web pages from that domain.
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always; // This header specifies the HTTP methods that are allowed when accessing the resource in response to a preflight request. In this case, it allows GET, POST, and OPTIONS methods.
+add_header Access-Control-Allow-Headers "Content-Type, Authorization" always; // This header specifies the allowed headers that can be used in the actual request when making a cross-origin request. In this case, it allows the Content-Type and Authorization headers.
+add_header Access-Control-Allow-Credentials "true" always; // This header indicates whether the response to the request can be exposed when the credentials flag is true. When used in response to a preflight request, it indicates that the actual request can include user credentials (e.g., cookies, HTTP authentication) and that they will be accepted by the server.
+add_header Access-Control-Max-Age "3600" always; // This header indicates how long the results of a preflight request can be cached in a preflight result cache. In this case, it allows the preflight response to be cached for 3600 seconds (1 hour), reducing the number of preflight requests made by the client for subsequent requests to the same resource.
+add_header Access-Control-Expose-Headers "X-Custom-Header" always; // This header allows the client to access specific headers in the response that are not part of the simple response headers. In this case, it allows the client to access the X-Custom-Header in the response, which can be useful for exposing additional information to the client that is not included in the default set of exposed headers.
+add_header Vary "Accept-Encoding" always; // This header indicates that the response may vary based on the value of the Accept-Encoding request header. It is used to inform caches that they should consider the Accept-Encoding header when deciding whether to serve a cached response, allowing for proper handling of compressed and uncompressed responses.
+
+proxy_connect_timeout 60s;
+proxy_read_timeout 60s;
+proxy_send_timeout 60s;
+proxy_set_header HOST $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_buffering on;
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size:1g inactive=60m use_temp_path=0ff;
+proxy_cache my_cache;
+proxy_cache_valid 200 1m;
+proxy_cache_invalid 404
+
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+limit_req_conn $binary_remote_addr zone=limit_conn:10m;
+limit_req zone=api_limit burst=10 nodelay;
+limit_conn conn_limit 2;
+
+
+response_code
+200 OK: The request has succeeded and the server has returned the requested resource.
+201 Created: The request has been fulfilled and a new resource has been created as a result.
+204 No Content: The server successfully processed the request, but is not returning any content.
+400 Bad Request: The server cannot process the request due to a client error (e.g., malformed request syntax).
+401 Unauthorized: The client must authenticate itself to get the requested response.
+403 Forbidden: The client does not have access rights to the content.
+404 Not Found: The server cannot find the requested resource.
+500 Internal Server Error: The server encountered an unexpected condition that prevented it from fulfilling the request.
+501 Not Implemented: The server does not support the functionality required to fulfill the request.
+502 Bad Gateway: The server, while acting as a gateway or proxy, received an invalid response from the upstream server.
+503 Service Unavailable: The server is currently unable to handle the request due to temporary overload or maintenance.
+504 Gateway Timeout: The server, while acting as a gateway or proxy, did not receive a timely response from the upstream server.
+505 HTTP Version Not Supported: The server does not support the HTTP protocol version used in the request.
