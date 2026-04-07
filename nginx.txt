@@ -64,21 +64,21 @@ location / {
 
 limit rate && conn
     http
-    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
-    limit_req_conn $binary_remote_addr zone=limit_conn:10m;
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s; // Define a rate limit zone named "api_limit" that uses the client's IP address (in binary format) as the key, with a shared memory size of 10MB and a rate limit of 5 requests per second.
+    limit_req_conn $binary_remote_addr zone=limit_conn:10m; // Define a connection limit zone named "limit_conn" that uses the client's IP address (in binary format) as the key, with a shared memory size of 10MB. This zone will be used to track the number of concurrent connections from each client IP address.
 
     location
-    limit_req zone=api_limit burst=10 nodelay;
-    limit_conn conn_limit 2;
+    limit_req zone=api_limit burst=10 nodelay; // Apply the defined rate limit to incoming requests, allowing a burst of up to 10 requests without delay. The "nodelay" option ensures that requests exceeding the rate limit will be rejected immediately rather than being delayed.
+    limit_conn conn_limit 2; // Apply the defined connection limit to incoming requests, allowing a maximum of 2 concurrent connections from the same client IP address. If a client exceeds this limit, additional connection attempts will be rejected until the number of active connections from that IP address falls below the specified limit.
 
 gzip
 
-gzip on;
+gzip on; 
 gzip_types *;
 gzip_min_length 256;
-gzip_proxied any;
-gzip_comp_level 1-9;
-gzip_static on;
+gzip_proxied any; // Enable gzip compression for all proxied requests, regardless of the request method or response status code. This allows Nginx to compress responses from the backend server before sending them to the client, improving performance and reducing bandwidth usage.
+gzip_comp_level 1-9; // Set the gzip compression level, where 1 is the fastest compression with the least compression ratio, and 9 is the slowest compression with the highest compression ratio. A common choice is to use a level of 6, which provides a good balance between compression efficiency and performance.
+gzip_static on; // Enable gzip_static to allow Nginx to serve pre-compressed .gz files if they exist. When a client requests a resource, Nginx will check if a corresponding .gz file is available and serve it directly, which can improve performance by reducing the need for on-the-fly compression.
 
 cache
 
@@ -95,7 +95,7 @@ location ~ /purge(/.*){
 
 http
 
-proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size:1g inactive=60m use_temp_path=0ff;
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size:1g inactive=60m use_temp_path=0ff; // Define a cache path with specific parameters: levels=1:2 creates a two-level directory structure for cached files, keys_zone=my_cache:10m allocates 10MB of shared memory for storing cache keys and metadata, max_size=1g limits the total size of the cache to 1GB, inactive=60m specifies that cached items that have not been accessed for 60 minutes will be removed from the cache, and use_temp_path=0 disables the use of temporary files for caching, allowing Nginx to write cached content directly to the specified cache directory. This configuration helps optimize caching performance and resource usage.
 
 location
 proxy_cache my_cache; // Enable caching for this location
@@ -245,7 +245,6 @@ Headers
 
 add_header Strict-Transport-Security "max-age=315360;" always;
 add_header X-Cache-Status $upstream_cache_status
-
 add_header X-Frame-Options "SAMEORIGIN" always; //SAMEORIGIN DENY ALLOW // SAMEORIGIN allows the page to be displayed in a frame on the same origin as the page itself, while DENY prevents the page from being displayed in a frame at all. ALLOW allows the page to be displayed in a frame on any origin.
 add_header X-Content-Type-Options "nosniff" always; //nosniff prevents browsers from MIME-sniffing a response away from the declared content-type, which can help mitigate certain types of attacks, such as cross-site scripting (XSS).
 add_header X-XSS-Protection "1; mode=block" always; //1; mode=block enables the cross-site scripting (XSS) filter built into most modern web browsers. When a potential XSS attack is detected, the browser will block the rendering of the page, preventing the attack from executing.
