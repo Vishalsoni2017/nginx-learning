@@ -1,0 +1,35 @@
+Headers
+
+add_header Strict-Transport-Security "max-age=315360;" always;
+add_header X-Cache-Status $upstream_cache_status
+add_header X-Frame-Options "SAMEORIGIN" always; //SAMEORIGIN DENY ALLOW // SAMEORIGIN allows the page to be displayed in a frame on the same origin as the page itself, while DENY prevents the page from being displayed in a frame at all. ALLOW allows the page to be displayed in a frame on any origin.
+add_header X-Content-Type-Options "nosniff" always; //nosniff prevents browsers from MIME-sniffing a response away from the declared content-type, which can help mitigate certain types of attacks, such as cross-site scripting (XSS).
+add_header X-XSS-Protection "1; mode=block" always; //1; mode=block enables the cross-site scripting (XSS) filter built into most modern web browsers. When a potential XSS attack is detected, the browser will block the rendering of the page, preventing the attack from executing.
+add_header Referrer-Policy "no-referrer-when-downgrade" always; // origin, strict-origin, strict-origin, origin-when-cross-origin, strict-origin-when-cross-origin, unsafe-url // no-referrer-when-downgrade means that the Referer header will be sent with the full URL when navigating from HTTPS to HTTPS, but will not be sent when navigating from HTTPS to HTTP, providing a balance between privacy and functionality. // origin means that the Referer header will only include the origin (scheme, host, and port) of the referring page, without the path or query string. strict-origin means that the Referer header will only be sent if the origin of the referring page is the same as the target page. strict-origin-when-cross-origin means that the Referer header will be sent with the full URL when navigating from HTTPS to HTTPS, but will only include the origin when navigating from HTTPS to HTTP or from HTTP to any other origin. unsafe-url means that the Referer header will always include the full URL, regardless of the security context.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://trusted.cdn.com; style-src 'self' https://trusted.cdn.com; img-src 'self' data:; font-src 'self' https://trusted.cdn.com; connect-src 'self' https://api.trusted.com; frame-src 'none';" always; // default-src sets the default policy for fetching resources such as JavaScript, images, CSS, fonts, AJAX requests, frames, etc. script-src specifies valid sources for JavaScript. style-src specifies valid sources for stylesheets. img-src specifies valid sources for images. font-src specifies valid sources for fonts. connect-src specifies valid sources for fetch, XMLHttpRequest, WebSocket, and EventSource connections. frame-src specifies valid sources for nested browsing contexts loading using elements such as <frame> and <iframe>.
+add_header Feature-Policy "geolocation 'self'; microphone 'none'; camera 'none';" always; // geolocation 'self' allows the page to access the user's geolocation data only if the request originates from the same origin as the page. microphone 'none' prevents the page from accessing the user's microphone. camera 'none' prevents the page from accessing the user's camera.
+add_header Access=Control-Allow-Origin "https://example.com" always; // This header allows cross-origin requests from the specified origin (https://example.com in this case). It is used to enable CORS (Cross-Origin Resource Sharing) for the specified domain, allowing resources on the server to be accessed by web pages from that domain.
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always; // This header specifies the HTTP methods that are allowed when accessing the resource in response to a preflight request. In this case, it allows GET, POST, and OPTIONS methods.
+add_header Access-Control-Allow-Headers "Content-Type, Authorization" always; // This header specifies the allowed headers that can be used in the actual request when making a cross-origin request. In this case, it allows the Content-Type and Authorization headers.
+add_header Access-Control-Allow-Credentials "true" always; // This header indicates whether the response to the request can be exposed when the credentials flag is true. When used in response to a preflight request, it indicates that the actual request can include user credentials (e.g., cookies, HTTP authentication) and that they will be accepted by the server.
+add_header Access-Control-Max-Age "3600" always; // This header indicates how long the results of a preflight request can be cached in a preflight result cache. In this case, it allows the preflight response to be cached for 3600 seconds (1 hour), reducing the number of preflight requests made by the client for subsequent requests to the same resource.
+add_header Access-Control-Expose-Headers "X-Custom-Header" always; // This header allows the client to access specific headers in the response that are not part of the simple response headers. In this case, it allows the client to access the X-Custom-Header in the response, which can be useful for exposing additional information to the client that is not included in the default set of exposed headers.
+add_header Vary "Accept-Encoding" always; // This header indicates that the response may vary based on the value of the Accept-Encoding request header. It is used to inform caches that they should consider the Accept-Encoding header when deciding whether to serve a cached response, allowing for proper handling of compressed and uncompressed responses.
+
+proxy_connect_timeout 60s;
+proxy_read_timeout 60s;
+proxy_send_timeout 60s;
+proxy_set_header HOST $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_buffering on;
+proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size:1g inactive=60m use_temp_path=0ff;
+proxy_cache my_cache;
+proxy_cache_valid 200 1m;
+proxy_cache_invalid 404
+
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+limit_req_conn $binary_remote_addr zone=limit_conn:10m;
+limit_req zone=api_limit burst=10 nodelay;
+limit_conn conn_limit 2
